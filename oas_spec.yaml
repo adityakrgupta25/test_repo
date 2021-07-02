@@ -1,0 +1,496 @@
+openapi: 3.0.0
+servers:
+  - description: Production templates API
+    url: https://sms-admin.instamojo.com/templates
+
+  - description:  Staging templates API
+    url: https://sms-admin-staging.instamojo.com
+
+info:
+  description: APIs for microsms templates api. To make a request the client needs to add AWS AccessKey and SecretKey in Authorization.
+  version: '1.1'
+  title: Templates API
+  contact:
+    email: aditya.g@instamojo.com
+
+security:
+  - AwsSigv4Auth: []
+
+tags:
+  - name: templates
+    x-displayName: templates
+    description: template
+
+x-tagGroups:
+  - name: API
+    tags:
+      - templates
+
+
+paths:
+  /templates/:
+    put:
+      tags:
+        - templates
+      summary: Add a new template-version
+      description: Puts a new template version on the service. If no template exists on the service with the given name, `version` is set as 1. Else the `version` is set as `current latest version + 1`.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                body:
+                  description: Template body. Read more https://phab.instamojo.com/w/platform-team/sms-service/sms-templates/#creating_template_name
+                  type: string
+                name:
+                  description:  Name of the Template. Read more https://phab.instamojo.com/w/platform-team/sms-service/sms-templates/#creating_template_name
+                  type: string
+
+      responses:
+        201:
+          description: Template created successfully.
+          content:
+            application/json:
+              schema:
+                type:  object
+                properties:
+                  name:
+                    type: string
+                    description: Template name
+                    example: imojo.payment.success
+                  creator:
+                    type: string
+                    description: Creator of the uploaded template. Picked up from the AWS-Auth credentials used for the request.
+                    example: aditya.g@instamojo.coom
+                  version:
+                    type: integer
+                    description: Version of the created template,
+                    example: 1
+                  created_at:
+                    type: string
+                    description: Time of upload
+                    example: '2020-05-26T18:31:07+0000'
+                  is_active:
+                    type: boolean
+                    example: true
+                    description:  Boolean to indicate whether a template version is active or not. With PUT `is_active` is set as true.
+                  dlt_templateid:
+                    description: Registered DLT-Template Id
+                    example: ""
+                  body:
+                    description: Content of the Template body
+                    type: string
+                    example: "Payment of {{.amount}} successful to {{.merchant_name}}"
+        400:
+          description: Bad request. Possible reasons-  <br>1. Invalid template body <br>2.  Bad JSON <br>3. Invalid template name
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    type: string
+                    description: Information about what went wrong.
+                  hint:
+                    type: string
+                    description: How to fix the error
+              examples:
+                1:
+                  value:
+                    "error": "invalid template body. unable to parse template body"
+                    "hint": "Variables in template body must be represented as `{{.variable_name}}`. Example, 'Your login otp is {{.otp}}'"
+                2:
+                  value:
+                    "error": "invalid json. unexpected EOF"
+                3:
+                  value:
+                    "error": "invalid template name. wrong format"
+                    "hint": "Template name length must be between 3 to 128 characters. Allowed characters are alphanumeric, underscore(_) and dot(.)"
+
+        403:
+          description: Forbidden. The user does not have permission to perform the operation.
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    type: string
+              examples:
+                0:
+                  value:
+                    message: "Forbidden"
+        500:
+          description: Internal server error
+
+    x-code-samples:
+      - lang: Python
+        source: >-
+          import requests
+          response = requests.put(
+              'https://sms-admin.instamojo.com/templates',
+              params = {"name": "imojo.payout.success" , "body": "Payment of {{.amount}} successful to the {{.name}}"},
+              auth = auth)
+
+
+    get:
+      summary: Get list of available templates
+      description: Returns a list of names of available templates.
+      parameters:
+        - in: query
+          name: name
+          schema:
+            type: string
+          example: "imojo"
+          description: Like filter for `name` field.
+        - in: query
+          name: limit
+          schema:
+            type: string
+          required: false
+          example: 10
+          description: Limit the number of the versions in the response. Default value is 50
+        - in: query
+          name: offset
+          schema:
+            type: string
+          required: false
+          description: Offset for the results, default value is 0
+      responses:
+        200:
+          description: JSON OK response.
+          content:
+            application/json:
+              examples:
+                0:
+                  value:
+                    - imojo.payout.success
+                    - imojo.refund.failure
+                    - imojo.something.random
+
+        403:
+          description: Forbidden. The user does not have permission to perform the operation.
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    type: string
+              examples:
+                0:
+                  value:
+                    message: "Forbidden"
+
+        500:
+          description: Internal server error
+
+
+  /templates/{name}/:
+    get:
+      summary: Get all the versions of a template
+      description: For a given template-name, this endpoint fetches a json list containing all the available versions in descending order.
+      parameters:
+        - in: path
+          name: name
+          schema:
+            type: string
+          required: true
+          example: imojo.payout.success
+          description: Name of the template you are trying to get
+        - in: query
+          name: limit
+          schema:
+            type: string
+          required: false
+          example: 10
+          description: Limit the number of the versions in the response. Default value is 50
+        - in: query
+          name: offset
+          schema:
+            type: string
+          required: false
+          description: Offset for the results. Default value is 0
+      responses:
+        200:
+          description: List of the versions returned
+          content:
+            application/json:
+              example:
+                templates:
+                  - name: "imojo.payout.success"
+                    body: "Paid {{.amount}} to {{.merchant_name}}."
+                    creator: "aditya.g@instamojo.com"
+                    dlt_template_id: ""
+                    version: 1
+                    is_active: false
+                    created_at: '2020-05-26T18:31:07+0000'
+                  - name: "imojo.payout.success"
+                    body: "Successfully paid {{.amount}} to {{.merchant_name}}."
+                    creator: "aditya.g@instamojo.com"
+                    dlt_template_id: ""
+                    version: 2
+                    is_active: true
+                    created_at: '2020-05-26T18:31:07+0000'
+
+        404:
+          description: Template with the given name does not exist
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    type: string
+                    description: Information about what went wrong.
+              examples:
+                0:
+                  value:
+                    error: "template not found. invalid name and(or) version"
+
+        500:
+          description: Internal server error
+
+        403:
+          description: Forbidden. The user does not have permission to perform the operation.
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    type: string
+              examples:
+                0:
+                  value:
+                    message: "Forbidden"
+
+  /templates/{name}/{version}/:
+    get:
+      summary: Get a particular version for a given template
+      description: Returns a json containing single object describing a template version
+      parameters:
+        - in: path
+          name: name
+          schema:
+            type: string
+          required: true
+          example: imojo.payout.succcess
+          description: Name of the template you are trying to get
+        - in: path
+          name: version
+          schema:
+            type: string
+          required: true
+          example: 1
+          description: Version of the template you are trying to get
+      responses:
+        200:
+          description: Template object
+          content:
+            application/json:
+              example:
+                name: "imojo.payout.success"
+                body: "Paid {{.amount}} to {{.merchant_name}}."
+                creator: "aditya.g@instamojo.com"
+                dlt_template_id: ""
+                version: 1
+                is_active: true
+
+        404:
+          description: Template with the given name does not exist
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    type: string
+                    description: Information about what went wrong.
+              examples:
+                0:
+                  value:
+                    error: "template not found. invalid name and(or) version"
+
+        500:
+          description: Internal server error
+
+        403:
+          description: Forbidden. The user does not have permission to perform the operation.
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    type: string
+              examples:
+                0:
+                  value:
+                    message: "Forbidden"
+
+
+
+  /templates/{name}/{version}/activate/:
+    post:
+      summary: Activate a particular version of a template.
+      description: Sets a `is_active` as `true` for a given template version
+      parameters:
+        - in: path
+          name: name
+          schema:
+            type: string
+          required: true
+          example: imojo.payout.success
+          description: Name of the template to be activated
+        - in: path
+          name: version
+          schema:
+            type: string
+          required: true
+          example: 1
+          description: Version of the template to be activated
+
+      responses:
+        200:
+          description: Template  object returned after setting `is_active` as true
+          content:
+            application/json:
+              schema:
+                type:  object
+                properties:
+                  name:
+                    type: string
+                    description: Template name.
+                    example: imojo.payment.success
+                  creator:
+                    type: string
+                    description: Who created the current revision to the template
+                    example: aditya.g@instamojo.coom
+                  version:
+                    type: integer
+                    description: version of the template
+                    example: 2
+                  created_at:
+                    type: string
+                    description: time of upload
+                    example: '2020-05-26T18:31:07+0000'
+                  is_active:
+                    type: boolean
+                    example: true
+                    description: boolean field that indicates whether template is active or not.
+                  dlt_template_id:
+                    description: (Optional)  registered DLT-Template Id
+                    type: string
+                    format: nullable
+                    example: ""
+                  body:
+                    description: content of the Template body
+                    type: string
+                    example: "Payment of {{.amount}} successful to {{.merchant_name}}"
+
+        404:
+          description: Template with the given name does not exist
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    type: string
+                    description: Information about what went wrong.
+              examples:
+                0:
+                  value:
+                    error: "template not found. invalid name and(or) version"
+
+        500:
+          description: Internal server error
+
+        403:
+          description: Forbidden. The user does not have permission to perform the operation.
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    type: string
+              examples:
+                0:
+                  value:
+                    message: "Forbidden"
+
+  /templates/{name}/{version}/deactivate/:
+    post:
+      summary: DeActivate a particular version of a template.
+      description: Sets a `is_active` as `false` for a given template version
+      parameters:
+        - in: path
+          name: name
+          schema:
+            type: string
+          required: true
+          example: imojo.payout.success
+          description: Name of the template to be deactivated
+        - in: path
+          name: version
+          schema:
+            type: string
+          required: true
+          example: 1
+          description: Version of the template to be deactivated
+
+      responses:
+        200:
+          description: Template  object returned after setting `is_active` as `false`
+          content:
+            application/json:
+              schema:
+                type:  object
+                properties:
+                  name:
+                    type: string
+                    description: Template name.
+                    example: MERCHANT.PAYMENT.SUCCESS
+                  creator:
+                    type: string
+                    description: creater of the template version
+                    example: aditya.g@instamojo.coom
+                  version:
+                    type: integer
+                    description:  version of the template
+                    example: 2
+                  created_at:
+                    type: string
+                    description: Time of upload
+                    example: '2020-05-26T18:31:07+0000'
+                  is_active:
+                    type: boolean
+                    example: false
+                    description: boolean field that indicates whether template is active or not. the field has been set as false.
+                  dlt_template_id:
+                    description: (Optional)  registered DLT-Template Id
+                    type: string
+                    format: nullable
+                    example: ""
+                  body:
+                    description: Content of the Template body
+                    type: string
+                    example: "Payment of {{.amount}} successful to {{.merchant_name}}"
+
+        404:
+          description: Template with the given name does not exist
+        500:
+          description: Internal server error
+        403:
+          description: Forbidden. The user does not have permission to perform the operation.
+          content:
+            application/json:
+              schema:
+                properties:
+                  message:
+                    type: string
+              examples:
+                0:
+                  value:
+                    message: "Forbidden"
+components:
+  securitySchemes:
+    AwsSigv4Auth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Use AWS Secret key and AWS Access Key to generate the header value. Ref- https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html. <br> For examples of signed requests in python refer- https://docs.aws.amazon.com/general/latest/gr/sigv4-signed-request-examples.html
